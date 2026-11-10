@@ -60,8 +60,22 @@ jobs:
         run: |
           set -e
           cd "$PROJECT_DIR"
-
           npm install --legacy-peer-deps
+
+      - name: Install Capacitor
+        run: |
+          set -e
+          cd "$PROJECT_DIR"
+
+          if [ ! -d node_modules/@capacitor/core ]; then
+            echo "Memasang Capacitor..."
+            npm install @capacitor/core@latest @capacitor/cli@latest @capacitor/android@latest --legacy-peer-deps
+          else
+            CAP_VERSION=$(node -p "require('./node_modules/@capacitor/core/package.json').version")
+            echo "Versi Capacitor: $CAP_VERSION"
+
+            npm install "@capacitor/cli@$CAP_VERSION" "@capacitor/android@$CAP_VERSION" --legacy-peer-deps
+          fi
 
       - name: Check Capacitor configuration
         run: |
@@ -76,56 +90,36 @@ jobs:
             exit 1
           fi
 
-          CAP_VERSION=$(node -e "
-            const p = require('./package.json');
-            const v = (p.dependencies || {})['@capacitor/core']
-              || (p.devDependencies || {})['@capacitor/core'];
-            if (!v) process.exit(1);
-            console.log(v);
-          ") || {
-            echo "ERROR: @capacitor/core tidak ditemukan di package.json!"
-            exit 1
-          }
+          echo "Konfigurasi Capacitor ditemukan!"
 
-          echo "Versi Capacitor Core: $CAP_VERSION"
-
-          npm install "@capacitor/android@$CAP_VERSION" \
-            --save --legacy-peer-deps
-
-      - name: Build web application
+      - name: Build web project
         run: |
           set -e
           cd "$PROJECT_DIR"
+          npm run build --if-present
 
-          npm run build
-
-      - name: Build Android APK
+      - name: Prepare Android
         run: |
           set -e
           cd "$PROJECT_DIR"
 
           if [ ! -d android ]; then
-            echo "Folder android belum ada."
-            echo "Membuat platform Android..."
-
             npx cap add android
           fi
 
-          echo "Sinkronisasi Capacitor..."
           npx cap sync android
 
-          cd android
+      - name: Build APK
+        run: |
+          set -e
+          cd "$PROJECT_DIR/android"
 
           chmod +x gradlew
-
-          echo "Memulai build APK..."
-
           ./gradlew assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: al-wasail-apk
-          path: "**/build/outputs/apk/debug/*.apk"
+          name: Al-Wasail-APK
+          path: ${{ env.PROJECT_DIR }}/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-          
