@@ -31,7 +31,6 @@ jobs:
       - name: Extract project ZIP
         run: |
           set -e
-
           ZIP_FILE=$(find . -maxdepth 1 -type f -iname "*.zip" | head -n 1)
 
           if [ -z "$ZIP_FILE" ]; then
@@ -54,9 +53,6 @@ jobs:
           PROJECT_DIR=$(dirname "$PACKAGE_FILE")
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-          echo "Project ditemukan: $PROJECT_DIR"
-          ls -la "$PROJECT_DIR"
-
       - name: Install dependencies
         run: |
           set -e
@@ -69,12 +65,9 @@ jobs:
           cd "$PROJECT_DIR"
 
           if [ ! -d node_modules/@capacitor/core ]; then
-            echo "Memasang Capacitor..."
             npm install @capacitor/core@latest @capacitor/cli@latest @capacitor/android@latest --legacy-peer-deps
           else
             CAP_VERSION=$(node -p "require('./node_modules/@capacitor/core/package.json').version")
-            echo "Versi Capacitor: $CAP_VERSION"
-
             npm install "@capacitor/cli@$CAP_VERSION" "@capacitor/android@$CAP_VERSION" --legacy-peer-deps
           fi
 
@@ -87,11 +80,9 @@ jobs:
              [ ! -f capacitor.config.js ] && \
              [ ! -f capacitor.config.json ] && \
              [ ! -f capacitor.config.mjs ]; then
-            echo "ERROR: File konfigurasi Capacitor tidak ditemukan!"
+            echo "ERROR: Konfigurasi Capacitor tidak ditemukan!"
             exit 1
           fi
-
-          echo "Konfigurasi Capacitor ditemukan!"
 
       - name: Build web project
         run: |
@@ -110,6 +101,26 @@ jobs:
 
           npx cap sync android
 
+      - name: Set app name AL WASAIL
+        run: |
+          set -e
+          cd "$PROJECT_DIR"
+
+          STRINGS_FILE="android/app/src/main/res/values/strings.xml"
+
+          if [ ! -f "$STRINGS_FILE" ]; then
+            echo "ERROR: strings.xml tidak ditemukan!"
+            exit 1
+          fi
+
+          if grep -q 'name="app_name"' "$STRINGS_FILE"; then
+            sed -i 's#<string name="app_name">[^<]*</string>#<string name="app_name">AL WASAIL</string>#' "$STRINGS_FILE"
+          else
+            sed -i 's#</resources>#    <string name="app_name">AL WASAIL</string>\n</resources>#' "$STRINGS_FILE"
+          fi
+
+          echo "Nama aplikasi berhasil diatur."
+
       - name: Generate Al-Wasail app icon
         run: |
           set -e
@@ -118,25 +129,35 @@ jobs:
           LOGO_FILE="$GITHUB_WORKSPACE/IMG_20261110_235553.jpg"
 
           if [ ! -f "$LOGO_FILE" ]; then
-            echo "ERROR: File logo tidak ditemukan!"
+            echo "ERROR: Logo Al-Wasail tidak ditemukan!"
             exit 1
           fi
 
           sudo apt-get update
           sudo apt-get install -y imagemagick
 
-          mkdir -p resources
+          mkdir -p assets
 
           convert "$LOGO_FILE" \
             -resize 1024x1024 \
             -gravity center \
             -background white \
             -extent 1024x1024 \
-            resources/icon.png
+            assets/icon.png
 
           npm install --no-save @capacitor/assets --legacy-peer-deps
 
-          npx capacitor-assets generate --android
+          npx capacitor-assets generate --android --assetPath assets
+
+          echo "Memeriksa ikon Android..."
+          find android/app/src/main/res -type f \
+            \( -name "ic_launcher*" -o -name "*launcher*" \) -print
+
+          if ! find android/app/src/main/res -type f \
+            \( -name "ic_launcher.png" -o -name "ic_launcher_foreground.png" -o -name "ic_launcher.xml" \) | grep -q .; then
+            echo "ERROR: Ikon launcher Android belum berhasil dibuat!"
+            exit 1
+          fi
 
       - name: Build APK
         run: |
@@ -149,6 +170,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Al-Wasail-APK
+          name: AL-WASAIL-APK
           path: ${{ env.PROJECT_DIR }}/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
