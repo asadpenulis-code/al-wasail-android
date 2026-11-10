@@ -25,11 +25,12 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Extract project ZIP
         run: |
           set -e
+
           ZIP_FILE=$(find . -maxdepth 1 -type f -iname "*.zip" | head -n 1)
 
           if [ -z "$ZIP_FILE" ]; then
@@ -49,25 +50,39 @@ jobs:
 
           PROJECT_DIR=$(dirname "$PACKAGE_FILE")
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
           echo "Project ditemukan: $PROJECT_DIR"
 
-      
-      
-      - name: Install dependencies and build
+      - name: Fix dependencies
         run: |
           cd "$PROJECT_DIR"
-          npm pkg set 'devDependencies.esbuild=^0.28.2'
+
+          node -e "const fs=require('fs'); const p=require('./package.json'); p.devDependencies=p.devDependencies||{}; p.devDependencies.esbuild='^0.28.2'; fs.writeFileSync('package.json', JSON.stringify(p,null,2));"
+
           echo "Versi esbuild:"
           npm pkg get devDependencies.esbuild
-          npm install --legacy-peer-deps
-          npm run build
 
-          
+      - name: Install dependencies
+        run: |
+          cd "$PROJECT_DIR"
+          npm install --legacy-peer-deps
+
+      - name: Build web application
+        run: |
+          cd "$PROJECT_DIR"
+          npm run build
 
       - name: Build Android APK
         run: |
           cd "$PROJECT_DIR"
+
+          if [ ! -d android ]; then
+            echo "ERROR: Folder android tidak ditemukan!"
+            exit 1
+          fi
+
           npx cap sync android
+
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
@@ -77,4 +92,5 @@ jobs:
         with:
           name: al-wasail-apk
           path: "**/build/outputs/apk/debug/*.apk"
+          if-no-files-found: error
           
