@@ -6,6 +6,7 @@ on:
   push:
     paths:
       - "*.zip"
+      - "al-wasail-logo.png"
       - ".github/workflows/**"
 
 jobs:
@@ -108,6 +109,24 @@ jobs:
           fi
 
           npx cap sync android
+
+      - name: Generate Al-Wasail app icon
+        run: |
+          set -e
+          cd "$PROJECT_DIR"
+
+          LOGO_FILE="$GITHUB_WORKSPACE/al-wasail-logo.png"
+
+          if [ ! -f "$LOGO_FILE" ]; then
+            echo "ERROR: al-wasail-logo.png tidak ditemukan di repository!"
+            exit 1
+          fi
+
+          mkdir -p resources
+          cp "$LOGO_FILE" resources/icon.png
+
+          npm install --no-save @capacitor/assets --legacy-peer-deps
+          npx capacitor-assets generate --android
 
       - name: Build APK
         run: |
