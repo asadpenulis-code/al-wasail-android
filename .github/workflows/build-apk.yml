@@ -52,12 +52,16 @@ jobs:
           echo "Project ditemukan: $PROJECT_DIR"
 
       
+      
       - name: Install dependencies and build
         run: |
           cd "$PROJECT_DIR"
           npm pkg set 'devDependencies.esbuild=^0.28.2'
-          npm install
+          echo "Versi esbuild:"
+          npm pkg get devDependencies.esbuild
+          npm install --legacy-peer-deps
           npm run build
+
           
 
       - name: Build Android APK
