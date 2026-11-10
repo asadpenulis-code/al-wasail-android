@@ -6,7 +6,7 @@ on:
   push:
     paths:
       - "*.zip"
-      - "al-wasail-logo.png"
+      - "IMG_20261110_235553.jpg"
       - ".github/workflows/**"
 
 jobs:
@@ -115,17 +115,27 @@ jobs:
           set -e
           cd "$PROJECT_DIR"
 
-          LOGO_FILE="$GITHUB_WORKSPACE/al-wasail-logo.png"
+          LOGO_FILE="$GITHUB_WORKSPACE/IMG_20261110_235553.jpg"
 
           if [ ! -f "$LOGO_FILE" ]; then
-            echo "ERROR: al-wasail-logo.png tidak ditemukan di repository!"
+            echo "ERROR: File logo tidak ditemukan!"
             exit 1
           fi
 
+          sudo apt-get update
+          sudo apt-get install -y imagemagick
+
           mkdir -p resources
-          cp "$LOGO_FILE" resources/icon.png
+
+          convert "$LOGO_FILE" \
+            -resize 1024x1024 \
+            -gravity center \
+            -background white \
+            -extent 1024x1024 \
+            resources/icon.png
 
           npm install --no-save @capacitor/assets --legacy-peer-deps
+
           npx capacitor-assets generate --android
 
       - name: Build APK
