@@ -51,11 +51,14 @@ jobs:
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "Project ditemukan: $PROJECT_DIR"
 
+      
       - name: Install dependencies and build
         run: |
           cd "$PROJECT_DIR"
+          npm pkg set 'devDependencies.esbuild=^0.28.2'
           npm install
           npm run build
+          
 
       - name: Build Android APK
         run: |
