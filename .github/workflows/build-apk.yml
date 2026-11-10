@@ -77,11 +77,11 @@ jobs:
           cd "$PROJECT_DIR"
 
           if [ ! -d android ]; then
-            echo "ERROR: Folder android tidak ditemukan!"
-            exit 1
-          fi
+  echo "Folder Android belum ada. Membuat Android project..."
+  npx cap add android
+fi
 
-          npx cap sync android
+npx cap sync android
 
           cd android
           chmod +x gradlew
