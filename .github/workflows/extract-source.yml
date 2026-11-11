@@ -1,0 +1,43 @@
+name: Extract AL WASAIL Source
+
+on:
+  workflow_dispatch:
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract source ZIP
+        run: |
+          set -e
+          mkdir -p project
+          unzip -o al-wasail.zip -d project
+
+          for i in 1 2 3 4; do
+            PACKAGE=$(find project -type f -name package.json | head -n 1)
+            if [ -n "$PACKAGE" ]; then
+              break
+            fi
+
+            INNER=$(find project -type f -iname "*.zip" | head -n 1)
+            if [ -z "$INNER" ]; then
+              echo "package.json tidak ditemukan"
+              exit 1
+            fi
+
+            mkdir -p "project/extracted-$i"
+            unzip -o "$INNER" -d "project/extracted-$i"
+          done
+
+          find project -name package.json
+          find project -name App.tsx
+
+      - name: Upload extracted source
+        uses: actions/upload-artifact@v4
+        with:
+          name: AL-WASAIL-SOURCE
+          path: project/
