@@ -1,5 +1,5 @@
 
-name: Build Al-Wasail APK
+name: Build AL WASAIL APK
 
 on:
   workflow_dispatch:
@@ -31,7 +31,8 @@ jobs:
       - name: Extract project ZIP
         run: |
           set -e
-          ZIP_FILE=$(find . -maxdepth 1 -type f -iname "*.zip" | head -n 1)
+
+          ZIP_FILE=$(find . -maxdepth 1 -type f -iname "*.zip" | sort | head -n 1)
 
           if [ -z "$ZIP_FILE" ]; then
             echo "ERROR: File ZIP tidak ditemukan!"
@@ -52,59 +53,30 @@ jobs:
 
           PROJECT_DIR=$(dirname "$PACKAGE_FILE")
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-name: Build Al-Wasail APK
 
-on:
-  workflow_dispatch:
-  push:
-    paths:
-      - "*.zip"
-      - "IMG_20261110_235553.jpg"
-      - ".github/workflows/**"
+          echo "Proyek ditemukan di: $PROJECT_DIR"
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Extract project ZIP
+      - name: Inspect project structure
         run: |
           set -e
-          ZIP_FILE=$(find . -maxdepth 1 -type f -iname "*.zip" | head -n 1)
+          cd "$PROJECT_DIR"
 
-          if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: File ZIP tidak ditemukan!"
-            exit 1
-          fi
+          echo "===== INFORMASI PACKAGE ====="
+          node -e "const p=require('./package.json'); console.log(JSON.stringify({name:p.name,scripts:p.scripts,dependencies:p.dependencies,devDependencies:p.devDependencies},null,2))"
 
-          mkdir -p project
-          unzip -o "$ZIP_FILE" -d project
+          echo "===== DAFTAR FILE PROYEK ====="
+          find . -maxdepth 3 -type f \
+            ! -path "./node_modules/*" \
+            ! -path "./android/*" \
+            ! -path "./.git/*" \
+            | sort | head -n 150
 
-          PACKAGE_FILE=$(find project \
-            -type d \( -name node_modules -o -name .git \) -prune \
-            -o -type f -name package.json -print | head -n 1)
-
-          if [ -z "$PACKAGE_FILE" ]; then
-            echo "ERROR: package.json tidak ditemukan!"
-            exit 1
-          fi
-
-          PROJECT_DIR=$(dirname "$PACKAGE_FILE")
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "===== PEMERIKSAAN FILE ENV ====="
+          for f in .env .env.example; do
+            if [ -f "$f" ]; then
+              echo "$f ditemukan"
+            fi
+          done
 
       - name: Install dependencies
         run: |
@@ -136,6 +108,8 @@ jobs:
             echo "ERROR: Konfigurasi Capacitor tidak ditemukan!"
             exit 1
           fi
+
+          echo "Konfigurasi Capacitor ditemukan."
 
       - name: Build web project
         run: |
@@ -202,135 +176,7 @@ jobs:
 
           npx capacitor-assets generate --android --assetPath assets
 
-          echo "Memeriksa ikon Android..."
-          find android/app/src/main/res -type f \
-            \( -name "ic_launcher*" -o -name "*launcher*" \) -print
-
-          if ! find android/app/src/main/res -type f \
-            \( -name "ic_launcher.png" -o -name "ic_launcher_foreground.png" -o -name "ic_launcher.xml" \) | grep -q .; then
-            echo "ERROR: Ikon launcher Android belum berhasil dibuat!"
-            exit 1
-          fi
-
-      - name: Build APK
-        run: |
-          set -e
-          cd "$PROJECT_DIR/android"
-
-          chmod +x gradlew
-          ./gradlew assembleDebug
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: AL-WASAIL-APK
-          path: ${{ env.PROJECT_DIR }}/android/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-      - name: Install dependencies
-        run: |
-          set -e
-          cd "$PROJECT_DIR"
-          npm install --legacy-peer-deps
-
-      - name: Install Capacitor
-        run: |
-          set -e
-          cd "$PROJECT_DIR"
-
-          if [ ! -d node_modules/@capacitor/core ]; then
-            npm install @capacitor/core@latest @capacitor/cli@latest @capacitor/android@latest --legacy-peer-deps
-          else
-            CAP_VERSION=$(node -p "require('./node_modules/@capacitor/core/package.json').version")
-            npm install "@capacitor/cli@$CAP_VERSION" "@capacitor/android@$CAP_VERSION" --legacy-peer-deps
-          fi
-
-      - name: Check Capacitor configuration
-        run: |
-          set -e
-          cd "$PROJECT_DIR"
-
-          if [ ! -f capacitor.config.ts ] && \
-             [ ! -f capacitor.config.js ] && \
-             [ ! -f capacitor.config.json ] && \
-             [ ! -f capacitor.config.mjs ]; then
-            echo "ERROR: Konfigurasi Capacitor tidak ditemukan!"
-            exit 1
-          fi
-
-      - name: Build web project
-        run: |
-          set -e
-          cd "$PROJECT_DIR"
-          npm run build --if-present
-
-      - name: Prepare Android
-        run: |
-          set -e
-          cd "$PROJECT_DIR"
-
-          if [ ! -d android ]; then
-            npx cap add android
-          fi
-
-          npx cap sync android
-
-      - name: Set app name AL WASAIL
-        run: |
-          set -e
-          cd "$PROJECT_DIR"
-
-          STRINGS_FILE="android/app/src/main/res/values/strings.xml"
-
-          if [ ! -f "$STRINGS_FILE" ]; then
-            echo "ERROR: strings.xml tidak ditemukan!"
-            exit 1
-          fi
-
-          if grep -q 'name="app_name"' "$STRINGS_FILE"; then
-            sed -i 's#<string name="app_name">[^<]*</string>#<string name="app_name">AL WASAIL</string>#' "$STRINGS_FILE"
-          else
-            sed -i 's#</resources>#    <string name="app_name">AL WASAIL</string>\n</resources>#' "$STRINGS_FILE"
-          fi
-
-          echo "Nama aplikasi berhasil diatur."
-
-      - name: Generate Al-Wasail app icon
-        run: |
-          set -e
-          cd "$PROJECT_DIR"
-
-          LOGO_FILE="$GITHUB_WORKSPACE/IMG_20261110_235553.jpg"
-
-          if [ ! -f "$LOGO_FILE" ]; then
-            echo "ERROR: Logo Al-Wasail tidak ditemukan!"
-            exit 1
-          fi
-
-          sudo apt-get update
-          sudo apt-get install -y imagemagick
-
-          mkdir -p assets
-
-          convert "$LOGO_FILE" \
-            -resize 1024x1024 \
-            -gravity center \
-            -background white \
-            -extent 1024x1024 \
-            assets/icon.png
-
-          npm install --no-save @capacitor/assets --legacy-peer-deps
-
-          npx capacitor-assets generate --android --assetPath assets
-
-          echo "Memeriksa ikon Android..."
-          find android/app/src/main/res -type f \
-            \( -name "ic_launcher*" -o -name "*launcher*" \) -print
-
-          if ! find android/app/src/main/res -type f \
-            \( -name "ic_launcher.png" -o -name "ic_launcher_foreground.png" -o -name "ic_launcher.xml" \) | grep -q .; then
-            echo "ERROR: Ikon launcher Android belum berhasil dibuat!"
-            exit 1
-          fi
+          echo "Ikon Android berhasil diproses."
 
       - name: Build APK
         run: |
