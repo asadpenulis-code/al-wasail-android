@@ -1,4 +1,5 @@
-name: Extract AL WASAIL Source
+
+name: Extract AL WASAIL Supabase Source
 
 on:
   workflow_dispatch:
@@ -11,21 +12,29 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract source ZIP
+      - name: Extract Supabase update ZIP
         run: |
           set -e
+          ZIP_FILE="AL-WASAIL-Supabase-Auth-Update.zip"
+
+          if [ ! -f "$ZIP_FILE" ]; then
+            echo "ERROR: ZIP pembaruan tidak ditemukan."
+            find . -maxdepth 1 -type f -iname "*.zip" -print
+            exit 1
+          fi
+
           mkdir -p project
-          unzip -o al-wasail.zip -d project
+          unzip -o "$ZIP_FILE" -d project
 
           for i in 1 2 3 4; do
-            PACKAGE=$(find project -type f -name package.json | head -n 1)
+            PACKAGE=$(find project -type d \( -name node_modules -o -name .git \) -prune -o -type f -name package.json -print | head -n 1)
             if [ -n "$PACKAGE" ]; then
               break
             fi
 
             INNER=$(find project -type f -iname "*.zip" | head -n 1)
             if [ -z "$INNER" ]; then
-              echo "package.json tidak ditemukan"
+              echo "ERROR: package.json tidak ditemukan."
               exit 1
             fi
 
@@ -33,11 +42,21 @@ jobs:
             unzip -o "$INNER" -d "project/extracted-$i"
           done
 
-          find project -name package.json
-          find project -name App.tsx
+          PACKAGE=$(find project -type d \( -name node_modules -o -name .git \) -prune -o -type f -name package.json -print | head -n 1)
+          APP=$(find project -type d \( -name node_modules -o -name .git \) -prune -o -type f -path "*/src/App.tsx" -print | head -n 1)
 
-      - name: Upload extracted source
+          if [ -z "$PACKAGE" ] || [ -z "$APP" ]; then
+            echo "ERROR: Struktur proyek tidak lengkap."
+            exit 1
+          fi
+
+          echo "Sumber proyek berhasil ditemukan:"
+          echo "$PACKAGE"
+          echo "$APP"
+
+      - name: Upload extracted Supabase source
         uses: actions/upload-artifact@v4
         with:
-          name: AL-WASAIL-SOURCE
+          name: AL-WASAIL-SUPABASE-SOURCE
           path: project/
+          if-no-files-found: error
