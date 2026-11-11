@@ -6,7 +6,7 @@ on:
   push:
     paths:
       - "*.zip"
-      - "IMG_20261110_235553.jpg"
+      - "*.jpg"
       - ".github/workflows/**"
 
 jobs:
@@ -28,55 +28,54 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Extract project ZIP
+      - name: Extract nested project ZIP
         run: |
           set -e
+
+          mkdir -p project
 
           ZIP_FILE=$(find . -maxdepth 1 -type f -iname "*.zip" | sort | head -n 1)
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: File ZIP tidak ditemukan!"
+            echo "ERROR: ZIP utama tidak ditemukan!"
             exit 1
           fi
 
-          mkdir -p project
           unzip -o "$ZIP_FILE" -d project
+
+          for i in 1 2 3 4; do
+            PACKAGE_FILE=$(find project \
+              -type d \( -name node_modules -o -name .git \) -prune \
+              -o -type f -name package.json -print | head -n 1)
+
+            if [ -n "$PACKAGE_FILE" ]; then
+              break
+            fi
+
+            INNER_ZIP=$(find project -type f -iname "*.zip" | head -n 1)
+
+            if [ -z "$INNER_ZIP" ]; then
+              echo "ERROR: package.json dan ZIP lanjutan tidak ditemukan!"
+              find project -maxdepth 4 -type f | head -n 100
+              exit 1
+            fi
+
+            mkdir -p "project/extracted-$i"
+            unzip -o "$INNER_ZIP" -d "project/extracted-$i"
+          done
 
           PACKAGE_FILE=$(find project \
             -type d \( -name node_modules -o -name .git \) -prune \
             -o -type f -name package.json -print | head -n 1)
 
           if [ -z "$PACKAGE_FILE" ]; then
-            echo "ERROR: package.json tidak ditemukan!"
+            echo "ERROR: package.json tidak ditemukan setelah ekstraksi!"
             exit 1
           fi
 
           PROJECT_DIR=$(dirname "$PACKAGE_FILE")
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-
-          echo "Proyek ditemukan di: $PROJECT_DIR"
-
-      - name: Inspect project structure
-        run: |
-          set -e
-          cd "$PROJECT_DIR"
-
-          echo "===== INFORMASI PACKAGE ====="
-          node -e "const p=require('./package.json'); console.log(JSON.stringify({name:p.name,scripts:p.scripts,dependencies:p.dependencies,devDependencies:p.devDependencies},null,2))"
-
-          echo "===== DAFTAR FILE PROYEK ====="
-          find . -maxdepth 3 -type f \
-            ! -path "./node_modules/*" \
-            ! -path "./android/*" \
-            ! -path "./.git/*" \
-            | sort | head -n 150
-
-          echo "===== PEMERIKSAAN FILE ENV ====="
-          for f in .env .env.example; do
-            if [ -f "$f" ]; then
-              echo "$f ditemukan"
-            fi
-          done
+          echo "Proyek ditemukan: $PROJECT_DIR"
 
       - name: Install dependencies
         run: |
@@ -109,8 +108,6 @@ jobs:
             exit 1
           fi
 
-          echo "Konfigurasi Capacitor ditemukan."
-
       - name: Build web project
         run: |
           set -e
@@ -135,54 +132,41 @@ jobs:
 
           STRINGS_FILE="android/app/src/main/res/values/strings.xml"
 
-          if [ ! -f "$STRINGS_FILE" ]; then
-            echo "ERROR: strings.xml tidak ditemukan!"
-            exit 1
+          if [ -f "$STRINGS_FILE" ]; then
+            if grep -q 'name="app_name"' "$STRINGS_FILE"; then
+              sed -i 's#<string name="app_name">[^<]*</string>#<string name="app_name">AL WASAIL</string>#' "$STRINGS_FILE"
+            fi
           fi
-
-          if grep -q 'name="app_name"' "$STRINGS_FILE"; then
-            sed -i 's#<string name="app_name">[^<]*</string>#<string name="app_name">AL WASAIL</string>#' "$STRINGS_FILE"
-          else
-            sed -i 's#</resources>#    <string name="app_name">AL WASAIL</string>\n</resources>#' "$STRINGS_FILE"
-          fi
-
-          echo "Nama aplikasi berhasil diatur."
 
       - name: Generate Al-Wasail app icon
         run: |
           set -e
           cd "$PROJECT_DIR"
 
-          LOGO_FILE="$GITHUB_WORKSPACE/IMG_20261110_235553.jpg"
+          LOGO_FILE=$(find "$GITHUB_WORKSPACE" -maxdepth 1 -type f \( -iname "*.jpg" -o -iname "*.png" \) | head -n 1)
 
-          if [ ! -f "$LOGO_FILE" ]; then
-            echo "ERROR: Logo Al-Wasail tidak ditemukan!"
-            exit 1
+          if [ -n "$LOGO_FILE" ]; then
+            sudo apt-get update
+            sudo apt-get install -y imagemagick
+            mkdir -p assets
+
+            convert "$LOGO_FILE" \
+              -resize 1024x1024 \
+              -gravity center \
+              -background white \
+              -extent 1024x1024 \
+              assets/icon.png
+
+            npm install --no-save @capacitor/assets --legacy-peer-deps
+            npx capacitor-assets generate --android --assetPath assets
+          else
+            echo "Logo tidak ditemukan, menggunakan ikon bawaan proyek."
           fi
-
-          sudo apt-get update
-          sudo apt-get install -y imagemagick
-
-          mkdir -p assets
-
-          convert "$LOGO_FILE" \
-            -resize 1024x1024 \
-            -gravity center \
-            -background white \
-            -extent 1024x1024 \
-            assets/icon.png
-
-          npm install --no-save @capacitor/assets --legacy-peer-deps
-
-          npx capacitor-assets generate --android --assetPath assets
-
-          echo "Ikon Android berhasil diproses."
 
       - name: Build APK
         run: |
           set -e
           cd "$PROJECT_DIR/android"
-
           chmod +x gradlew
           ./gradlew assembleDebug
 
